@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>자금일보 대시보드</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --s1: #2a78d6; --s2: #eb6834; --seq: #cde2fb;
+    --good: #006300; --bad: #d03b3b; --chip: #eeede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --s1: #3987e5; --s2: #d95926; --seq: #184f95;
+      --good: #0ca30c; --bad: #ec835a; --chip: #262624;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --s1: #3987e5; --s2: #d95926; --seq: #184f95;
+    --good: #0ca30c; --bad: #ec835a; --chip: #262624;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .sub { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+  .picker { display: flex; gap: 6px; align-items: center; }
+  .picker button, .picker select { font: inherit; color: var(--ink); background: var(--surface);
+         border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  .picker button:disabled { opacity: .35; cursor: default; }
+  .picker button:hover:not(:disabled), .picker select:hover { background: var(--chip); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; font-weight: 650; }
+  .card .note { color: var(--ink-2); font-size: 12px; margin: 0 0 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .kpi .lab { color: var(--ink-2); font-size: 12px; }
+  .kpi .val { font-size: 24px; font-weight: 650; margin: 2px 0; letter-spacing: -.01em; }
+  .kpi .val small { font-size: 13px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+  .kpi .meta { color: var(--ink-2); font-size: 12px; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
+  th:first-child, td:first-child, td.l, th.l { text-align: left; }
+  td.num { font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 650; border-bottom: 0; }
+  .scroll { overflow-x: auto; }
+  .tag { display: inline-block; font-size: 11px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--axis); color: var(--ink-2); }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--axis);
+         border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.14);
+         opacity: 0; transition: opacity .08s; z-index: 5; min-width: 150px; }
+  .tip b { display: block; margin-bottom: 4px; }
+  .tip div { display: flex; justify-content: space-between; gap: 14px; }
+  .tip span.k { color: var(--ink-2); }
+  details.checks summary { cursor: pointer; list-style: none; display: inline-flex; gap: 8px; align-items: center; }
+  details.checks summary::-webkit-details-marker { display: none; }
+  details.checks ul { margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
+  details.checks li { padding: 4px 0; border-bottom: 1px solid var(--grid); display: flex; gap: 10px; }
+  details.checks li .st { width: 40px; font-weight: 650; }
+  .pass { color: var(--good); } .fail { color: var(--bad); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .empty { color: var(--muted); padding: 12px 0; }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
+  .stale { padding: 10px 16px; border-color: var(--bad); font-size: 13px; }
+  .stale[hidden] { display: none; }
+  .kpi, .two > .card { min-width: 0; }
+  @media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } .two { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .kpis { grid-template-columns: 1fr; } }
+  @media (forced-colors: active) { .card, .kpi { border-color: CanvasText; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span id="company"></span> 자금일보</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="picker">
+      <button id="prev" aria-label="이전 거래일">◀</button>
+      <select id="dateSel" aria-label="기준일"></select>
+      <button id="next" aria-label="다음 거래일">▶</button>
+      <button id="latest">최신일</button>
+    </div>
+  </header>
+
+  <div class="card stale" id="stale" hidden></div>
+
+  <div class="card" style="padding:10px 16px">
+    <details class="checks" id="checks"></details>
+  </div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="card">
+    <h2>계좌별 자금일보</h2>
+    <p class="note">단위: 원 · 자금일보 양식과 같은 구성 (월누계는 해당 월 1일부터)</p>
+    <div class="scroll"><table id="report"></table></div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h2>회사 전체 실제 입출금</h2>
+      <p class="note">계좌 합계에서 계좌간이체를 뺀 금액 (단위: 원)</p>
+      <div class="scroll"><table id="real"></table></div>
+      <div id="xferList" style="margin-top:10px;font-size:12px;color:var(--ink-2)"></div>
+    </div>
+    <div class="card">
+      <h2>최근 거래일별 합계 잔액</h2>
+      <p class="note">클릭하면 그날로 이동 · 단위: 백만원</p>
+      <div class="chart" id="balChart"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>일별 실제 입금·출금</h2>
+    <p class="note">계좌간이체 제외 · 단위: 백만원 · 막대를 클릭하면 그날로 이동</p>
+    <div class="legend"><span><i style="background:var(--s1)"></i>실제 입금</span><span><i style="background:var(--s2)"></i>실제 출금</span></div>
+    <div class="chart" id="flowChart"></div>
+  </div>
+
+  <div class="card">
+    <h2>입출금 내역 <span id="txnDate" style="font-weight:400;color:var(--ink-2)"></span></h2>
+    <div class="scroll"><table id="txns"></table></div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const D = {"company": "(주)다온생활", "accounts": ["국민 업무용", "신한 급여"], "asOf": "2026-10-01", "builtAt": "2026-10-29 16:15", "files": ["국민_업무용_거래내역_2026-09.xlsx", "신한_급여_거래내역_2026-09.xlsx", "추가자료_10월1일/거래내역_2026-10-01.xlsx"], "dupDropped": 0, "days": [{"date": "2026-09-01", "accts": {"국민 업무용": {"open": 790837750, "inn": 953350, "out": 650000, "close": 791141100, "mtdIn": 953350, "mtdOut": 650000}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 953350, "realOut": 650000, "totalOpen": 824935230, "totalClose": 825238580}, {"date": "2026-09-02", "accts": {"국민 업무용": {"open": 791141100, "inn": 1258230, "out": 1650500, "close": 790748830, "mtdIn": 2211580, "mtdOut": 2300500}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 1258230, "realOut": 1650500, "totalOpen": 825238580, "totalClose": 824846310}, {"date": "2026-09-03", "accts": {"국민 업무용": {"open": 790748830, "inn": 1131420, "out": 533600, "close": 791346650, "mtdIn": 3343000, "mtdOut": 2834100}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 1131420, "realOut": 533600, "totalOpen": 824846310, "totalClose": 825444130}, {"date": "2026-09-04", "accts": {"국민 업무용": {"open": 791346650, "inn": 38241070, "out": 7914300, "close": 821673420, "mtdIn": 41584070, "mtdOut": 10748400}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 38241070, "realOut": 7914300, "totalOpen": 825444130, "totalClose": 855770900}, {"date": "2026-09-07", "accts": {"국민 업무용": {"open": 821673420, "inn": 1141780, "out": 15545770, "close": 807269430, "mtdIn": 42725850, "mtdOut": 26294170}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 1141780, "realOut": 15545770, "totalOpen": 855770900, "totalClose": 841366910}, {"date": "2026-09-08", "accts": {"국민 업무용": {"open": 807269430, "inn": 40461980, "out": 19468510, "close": 828262900, "mtdIn": 83187830, "mtdOut": 45762680}, "신한 급여": {"open": 34097480, "inn": 0, "out": 0, "close": 34097480, "mtdIn": 0, "mtdOut": 0}}, "xfer": 0, "realIn": 40461980, "realOut": 19468510, "totalOpen": 841366910, "totalClose": 862360380}, {"date": "2026-09-09", "accts": {"국민 업무용": {"open": 828262900, "inn": 1017000, "out": 20099800, "close": 809180100, "mtdIn": 84204830, "mtdOut": 65862480}, "신한 급여": {"open": 34097480, "inn": 10100000, "out": 0, "close": 44197480, "mtdIn": 10100000, "mtdOut": 0}}, "xfer": 10100000, "realIn": 1017000, "realOut": 9999800, "totalOpen": 862360380, "totalClose": 853377580}, {"date": "2026-09-10", "accts": {"국민 업무용": {"open": 809180100, "inn": 8386010, "out": 1851000, "close": 815715110, "mtdIn": 92590840, "mtdOut": 67713480}, "신한 급여": {"open": 44197480, "inn": 0, "out": 10067680, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 8386010, "realOut": 11918680, "totalOpen": 853377580, "totalClose": 849844910}, {"date": "2026-09-11", "accts": {"국민 업무용": {"open": 815715110, "inn": 6607030, "out": 7739000, "close": 814583140, "mtdIn": 99197870, "mtdOut": 75452480}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 6607030, "realOut": 7739000, "totalOpen": 849844910, "totalClose": 848712940}, {"date": "2026-09-14", "accts": {"국민 업무용": {"open": 814583140, "inn": 1286630, "out": 29626330, "close": 786243440, "mtdIn": 100484500, "mtdOut": 105078810}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 1286630, "realOut": 29626330, "totalOpen": 848712940, "totalClose": 820373240}, {"date": "2026-09-15", "accts": {"국민 업무용": {"open": 786243440, "inn": 39266290, "out": 197900, "close": 825311830, "mtdIn": 139750790, "mtdOut": 105276710}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 39266290, "realOut": 197900, "totalOpen": 820373240, "totalClose": 859441630}, {"date": "2026-09-16", "accts": {"국민 업무용": {"open": 825311830, "inn": 846190, "out": 10866800, "close": 815291220, "mtdIn": 140596980, "mtdOut": 116143510}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 846190, "realOut": 10866800, "totalOpen": 859441630, "totalClose": 849421020}, {"date": "2026-09-17", "accts": {"국민 업무용": {"open": 815291220, "inn": 962170, "out": 2556400, "close": 813696990, "mtdIn": 141559150, "mtdOut": 118699910}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 962170, "realOut": 2556400, "totalOpen": 849421020, "totalClose": 847826790}, {"date": "2026-09-18", "accts": {"국민 업무용": {"open": 813696990, "inn": 37848600, "out": 9964900, "close": 841580690, "mtdIn": 179407750, "mtdOut": 128664810}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 37848600, "realOut": 9964900, "totalOpen": 847826790, "totalClose": 875710490}, {"date": "2026-09-21", "accts": {"국민 업무용": {"open": 841580690, "inn": 886590, "out": 14605440, "close": 827861840, "mtdIn": 180294340, "mtdOut": 143270250}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 886590, "realOut": 14605440, "totalOpen": 875710490, "totalClose": 861991640}, {"date": "2026-09-22", "accts": {"국민 업무용": {"open": 827861840, "inn": 1012830, "out": 23990390, "close": 804884280, "mtdIn": 181307170, "mtdOut": 167260640}, "신한 급여": {"open": 34129800, "inn": 0, "out": 0, "close": 34129800, "mtdIn": 10100000, "mtdOut": 10067680}}, "xfer": 0, "realIn": 1012830, "realOut": 23990390, "totalOpen": 861991640, "totalClose": 839014080}, {"date": "2026-09-23", "accts": {"국민 업무용": {"open": 804884280, "inn": 1219200, "out": 46339100, "close": 759764380, "mtdIn": 182526370, "mtdOut": 213599740}, "신한 급여": {"open": 34129800, "inn": 38000000, "out": 35419300, "close": 36710500, "mtdIn": 48100000, "mtdOut": 45486980}}, "xfer": 38000000, "realIn": 1219200, "realOut": 43758400, "totalOpen": 839014080, "totalClose": 796474880}, {"date": "2026-09-28", "accts": {"국민 업무용": {"open": 759764380, "inn": 8587940, "out": 13665660, "close": 754686660, "mtdIn": 191114310, "mtdOut": 227265400}, "신한 급여": {"open": 36710500, "inn": 0, "out": 0, "close": 36710500, "mtdIn": 48100000, "mtdOut": 45486980}}, "xfer": 0, "realIn": 8587940, "realOut": 13665660, "totalOpen": 796474880, "totalClose": 791397160}, {"date": "2026-09-29", "accts": {"국민 업무용": {"open": 754686660, "inn": 50683200, "out": 9879100, "close": 795490760, "mtdIn": 241797510, "mtdOut": 237144500}, "신한 급여": {"open": 36710500, "inn": 0, "out": 1500500, "close": 35210000, "mtdIn": 48100000, "mtdOut": 46987480}}, "xfer": 1500000, "realIn": 49183200, "realOut": 9879600, "totalOpen": 791397160, "totalClose": 830700760}, {"date": "2026-09-30", "accts": {"국민 업무용": {"open": 795490760, "inn": 36704050, "out": 19754500, "close": 812440310, "mtdIn": 278501560, "mtdOut": 256899000}, "신한 급여": {"open": 35210000, "inn": 0, "out": 0, "close": 35210000, "mtdIn": 48100000, "mtdOut": 46987480}}, "xfer": 0, "realIn": 36704050, "realOut": 19754500, "totalOpen": 830700760, "totalClose": 847650310}, {"date": "2026-10-01", "accts": {"국민 업무용": {"open": 812440310, "inn": 61510000, "out": 36832610, "close": 837117700, "mtdIn": 61510000, "mtdOut": 36832610}, "신한 급여": {"open": 35210000, "inn": 3100000, "out": 2817900, "close": 35492100, "mtdIn": 3100000, "mtdOut": 2817900}}, "xfer": 3100000, "realIn": 61510000, "realOut": 36550510, "totalOpen": 847650310, "totalClose": 872609800}], "transfers": [{"date": "2026-09-09", "amount": 10100000, "fromAcct": "국민 업무용", "toAcct": "신한 급여", "outDesc": "(주)다온생활", "inDesc": "타행입금"}, {"date": "2026-09-23", "amount": 38000000, "fromAcct": "국민 업무용", "toAcct": "신한 급여", "outDesc": "(주)다온생활", "inDesc": "타행입금"}, {"date": "2026-10-01", "amount": 3100000, "fromAcct": "국민 업무용", "toAcct": "신한 급여", "outDesc": "(주)다온생활", "inDesc": "타행입금"}, {"date": "2026-09-29", "amount": 1500000, "fromAcct": "신한 급여", "toAcct": "국민 업무용", "outDesc": "(주)다온생활 국민", "inDesc": "타행이체"}], "checks": [{"label": "거래 행별 잔액 연속성 (직전 잔액 + 입금 − 출금 = 거래후잔액)", "ok": true, "detail": "226행 확인"}, {"label": "일별 전일 잔액 + 입금 − 출금 = 금일 잔액", "ok": true, "detail": "21일 × 2계좌"}, {"label": "계좌간이체 짝 맞춤 (회사명 거래가 전부 입금·출금 한 쌍)", "ok": true, "detail": "4쌍 매칭"}, {"label": "이체 입금 합계 = 이체 출금 합계", "ok": true, "detail": "52,700,000원"}, {"label": "2026-09 월말 잔액 = 은행잔액대사 파일", "ok": true, "detail": "국민 업무용 812,440,310 / 신한 급여 35,210,000"}], "txns": [{"date": "2026-09-01", "time": "09:12:15", "acct": "국민 업무용", "type": "대체", "desc": "대출이자", "inn": 0, "out": 650000, "xfer": false}, {"date": "2026-09-01", "time": "11:29:09", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 953350, "out": 0, "xfer": false}, {"date": "2026-09-02", "time": "11:11:22", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1258230, "out": 0, "xfer": false}, {"date": "2026-09-02", "time": "11:40:03", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A01", "inn": 0, "out": 1650000, "xfer": false}, {"date": "2026-09-02", "time": "11:40:03", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-03", "time": "11:24:59", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1131420, "out": 0, "xfer": false}, {"date": "2026-09-03", "time": "16:29:21", "acct": "국민 업무용", "type": "타행송금", "desc": "윤*영", "inn": 0, "out": 388800, "xfer": false}, {"date": "2026-09-03", "time": "16:29:21", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-03", "time": "16:30:56", "acct": "국민 업무용", "type": "타행송금", "desc": "윤*영", "inn": 0, "out": 53000, "xfer": false}, {"date": "2026-09-03", "time": "16:30:56", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-03", "time": "17:26:19", "acct": "국민 업무용", "type": "타행송금", "desc": "최*현", "inn": 0, "out": 42800, "xfer": false}, {"date": "2026-09-03", "time": "17:26:19", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-03", "time": "17:50:31", "acct": "국민 업무용", "type": "타행송금", "desc": "김*호", "inn": 0, "out": 47000, "xfer": false}, {"date": "2026-09-03", "time": "17:50:31", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-04", "time": "11:05:25", "acct": "국민 업무용", "type": "타행이체", "desc": "한가람유통(주)", "inn": 37213000, "out": 0, "xfer": false}, {"date": "2026-09-04", "time": "11:13:18", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1028070, "out": 0, "xfer": false}, {"date": "2026-09-04", "time": "14:20:48", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V01", "inn": 0, "out": 7788000, "xfer": false}, {"date": "2026-09-04", "time": "14:20:48", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-04", "time": "16:56:10", "acct": "국민 업무용", "type": "타행송금", "desc": "최*현", "inn": 0, "out": 38700, "xfer": false}, {"date": "2026-09-04", "time": "16:56:10", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-04", "time": "17:58:30", "acct": "국민 업무용", "type": "타행송금", "desc": "김*준", "inn": 0, "out": 86100, "xfer": false}, {"date": "2026-09-04", "time": "17:58:30", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-07", "time": "09:30:30", "acct": "국민 업무용", "type": "자동이체", "desc": "택배사T01", "inn": 0, "out": 1259570, "xfer": false}, {"date": "2026-09-07", "time": "11:12:10", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1141780, "out": 0, "xfer": false}, {"date": "2026-09-07", "time": "11:54:20", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A02", "inn": 0, "out": 2090000, "xfer": false}, {"date": "2026-09-07", "time": "11:54:20", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-07", "time": "14:41:40", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V02", "inn": 0, "out": 11572000, "xfer": false}, {"date": "2026-09-07", "time": "14:41:40", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-07", "time": "16:12:10", "acct": "국민 업무용", "type": "타행송금", "desc": "조*우", "inn": 0, "out": 163100, "xfer": false}, {"date": "2026-09-07", "time": "16:12:10", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-07", "time": "16:31:47", "acct": "국민 업무용", "type": "타행송금", "desc": "조*희", "inn": 0, "out": 95900, "xfer": false}, {"date": "2026-09-07", "time": "16:31:47", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-07", "time": "17:51:32", "acct": "국민 업무용", "type": "타행송금", "desc": "권*서", "inn": 0, "out": 362700, "xfer": false}, {"date": "2026-09-07", "time": "17:51:32", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-08", "time": "11:19:56", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1191980, "out": 0, "xfer": false}, {"date": "2026-09-08", "time": "14:27:31", "acct": "국민 업무용", "type": "타행이체", "desc": "그린마트(주)", "inn": 39270000, "out": 0, "xfer": false}, {"date": "2026-09-08", "time": "14:28:17", "acct": "국민 업무용", "type": "해외송금", "desc": "해외매입처F01", "inn": 0, "out": 19450510, "xfer": false}, {"date": "2026-09-08", "time": "14:28:17", "acct": "국민 업무용", "type": "대체", "desc": "해외송금수수료", "inn": 0, "out": 10000, "xfer": false}, {"date": "2026-09-08", "time": "14:28:17", "acct": "국민 업무용", "type": "대체", "desc": "전신료", "inn": 0, "out": 8000, "xfer": false}, {"date": "2026-09-09", "time": "10:05:00", "acct": "신한 급여", "type": "타행입금", "desc": "(주)다온생활", "inn": 10100000, "out": 0, "xfer": true}, {"date": "2026-09-09", "time": "10:05:01", "acct": "국민 업무용", "type": "타행송금", "desc": "(주)다온생활", "inn": 0, "out": 10100000, "xfer": true}, {"date": "2026-09-09", "time": "10:05:01", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-09", "time": "11:29:55", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1017000, "out": 0, "xfer": false}, {"date": "2026-09-09", "time": "16:35:04", "acct": "국민 업무용", "type": "타행송금", "desc": "서*민", "inn": 0, "out": 120300, "xfer": false}, {"date": "2026-09-09", "time": "16:35:04", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-09", "time": "16:49:22", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V06", "inn": 0, "out": 9878000, "xfer": false}, {"date": "2026-09-09", "time": "16:49:22", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-10", "time": "09:16:16", "acct": "국민 업무용", "type": "타행이체", "desc": "(주)세움건설 복지몰", "inn": 7480000, "out": 0, "xfer": false}, {"date": "2026-09-10", "time": "09:30:00", "acct": "신한 급여", "type": "국세납부", "desc": "근로소득세 8월 귀속", "inn": 0, "out": 1958800, "xfer": false}, {"date": "2026-09-10", "time": "09:31:00", "acct": "신한 급여", "type": "지방세납부", "desc": "지방소득세 8월 귀속", "inn": 0, "out": 195880, "xfer": false}, {"date": "2026-09-10", "time": "09:32:00", "acct": "신한 급여", "type": "공과금", "desc": "국민연금 8월분", "inn": 0, "out": 3560700, "xfer": false}, {"date": "2026-09-10", "time": "09:33:00", "acct": "신한 급여", "type": "공과금", "desc": "건강보험 8월분", "inn": 0, "out": 2802200, "xfer": false}, {"date": "2026-09-10", "time": "09:34:00", "acct": "신한 급여", "type": "공과금", "desc": "장기요양보험 8월분", "inn": 0, "out": 352900, "xfer": false}, {"date": "2026-09-10", "time": "09:35:00", "acct": "신한 급여", "type": "공과금", "desc": "고용보험 8월분", "inn": 0, "out": 819600, "xfer": false}, {"date": "2026-09-10", "time": "09:36:00", "acct": "신한 급여", "type": "공과금", "desc": "산재보험 8월분", "inn": 0, "out": 377600, "xfer": false}, {"date": "2026-09-10", "time": "11:28:48", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 906010, "out": 0, "xfer": false}, {"date": "2026-09-10", "time": "11:32:27", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A01", "inn": 0, "out": 1540000, "xfer": false}, {"date": "2026-09-10", "time": "11:32:27", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-10", "time": "17:58:54", "acct": "국민 업무용", "type": "타행송금", "desc": "조*희", "inn": 0, "out": 310000, "xfer": false}, {"date": "2026-09-10", "time": "17:58:54", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-11", "time": "09:33:45", "acct": "국민 업무용", "type": "타행이체", "desc": "미래보험(주) 사내몰", "inn": 5797000, "out": 0, "xfer": false}, {"date": "2026-09-11", "time": "11:12:37", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 810030, "out": 0, "xfer": false}, {"date": "2026-09-11", "time": "14:57:30", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V03", "inn": 0, "out": 7403000, "xfer": false}, {"date": "2026-09-11", "time": "14:57:30", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-11", "time": "16:00:33", "acct": "국민 업무용", "type": "타행송금", "desc": "윤*영", "inn": 0, "out": 307900, "xfer": false}, {"date": "2026-09-11", "time": "16:00:33", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-11", "time": "16:08:13", "acct": "국민 업무용", "type": "타행송금", "desc": "김*호", "inn": 0, "out": 26600, "xfer": false}, {"date": "2026-09-11", "time": "16:08:13", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-14", "time": "09:00:48", "acct": "국민 업무용", "type": "대체", "desc": "국민카드", "inn": 0, "out": 15287060, "xfer": false}, {"date": "2026-09-14", "time": "09:30:13", "acct": "국민 업무용", "type": "자동이체", "desc": "택배사T01", "inn": 0, "out": 1230870, "xfer": false}, {"date": "2026-09-14", "time": "10:38:13", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A02", "inn": 0, "out": 2090000, "xfer": false}, {"date": "2026-09-14", "time": "10:38:13", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-14", "time": "11:17:28", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1286630, "out": 0, "xfer": false}, {"date": "2026-09-14", "time": "14:03:06", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V04", "inn": 0, "out": 10791000, "xfer": false}, {"date": "2026-09-14", "time": "14:03:06", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-14", "time": "17:04:09", "acct": "국민 업무용", "type": "타행송금", "desc": "김*현", "inn": 0, "out": 225900, "xfer": false}, {"date": "2026-09-14", "time": "17:04:09", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-15", "time": "11:19:01", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 832290, "out": 0, "xfer": false}, {"date": "2026-09-15", "time": "12:56:20", "acct": "국민 업무용", "type": "타행이체", "desc": "한가람유통(주)", "inn": 38434000, "out": 0, "xfer": false}, {"date": "2026-09-15", "time": "16:51:39", "acct": "국민 업무용", "type": "타행송금", "desc": "신*우", "inn": 0, "out": 197400, "xfer": false}, {"date": "2026-09-15", "time": "16:51:39", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-16", "time": "11:17:34", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 846190, "out": 0, "xfer": false}, {"date": "2026-09-16", "time": "14:07:24", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V05", "inn": 0, "out": 10802000, "xfer": false}, {"date": "2026-09-16", "time": "14:07:24", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-16", "time": "17:02:34", "acct": "국민 업무용", "type": "타행송금", "desc": "최*진", "inn": 0, "out": 63800, "xfer": false}, {"date": "2026-09-16", "time": "17:02:34", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-17", "time": "11:22:06", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 962170, "out": 0, "xfer": false}, {"date": "2026-09-17", "time": "11:32:11", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A01", "inn": 0, "out": 2200000, "xfer": false}, {"date": "2026-09-17", "time": "11:32:11", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-17", "time": "17:37:55", "acct": "국민 업무용", "type": "타행송금", "desc": "김*현", "inn": 0, "out": 238900, "xfer": false}, {"date": "2026-09-17", "time": "17:37:55", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-17", "time": "17:52:21", "acct": "국민 업무용", "type": "타행송금", "desc": "권*서", "inn": 0, "out": 116000, "xfer": false}, {"date": "2026-09-17", "time": "17:52:21", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-18", "time": "10:52:59", "acct": "국민 업무용", "type": "타행이체", "desc": "그린마트(주)", "inn": 36652000, "out": 0, "xfer": false}, {"date": "2026-09-18", "time": "11:24:36", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1196600, "out": 0, "xfer": false}, {"date": "2026-09-18", "time": "15:47:26", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V01", "inn": 0, "out": 9405000, "xfer": false}, {"date": "2026-09-18", "time": "15:47:26", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-18", "time": "16:00:51", "acct": "국민 업무용", "type": "타행송금", "desc": "장*영", "inn": 0, "out": 126600, "xfer": false}, {"date": "2026-09-18", "time": "16:00:51", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-18", "time": "17:33:01", "acct": "국민 업무용", "type": "타행송금", "desc": "김*호", "inn": 0, "out": 345900, "xfer": false}, {"date": "2026-09-18", "time": "17:33:01", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-18", "time": "17:55:48", "acct": "국민 업무용", "type": "타행송금", "desc": "장*희", "inn": 0, "out": 85400, "xfer": false}, {"date": "2026-09-18", "time": "17:55:48", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-21", "time": "06:00:02", "acct": "국민 업무용", "type": "지로요금", "desc": "인터넷전화요금", "inn": 0, "out": 303980, "xfer": false}, {"date": "2026-09-21", "time": "06:00:35", "acct": "국민 업무용", "type": "지로요금", "desc": "휴대폰요금", "inn": 0, "out": 441510, "xfer": false}, {"date": "2026-09-21", "time": "09:30:44", "acct": "국민 업무용", "type": "자동이체", "desc": "택배사T01", "inn": 0, "out": 1271850, "xfer": false}, {"date": "2026-09-21", "time": "11:15:53", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A02", "inn": 0, "out": 1870000, "xfer": false}, {"date": "2026-09-21", "time": "11:15:53", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-21", "time": "11:21:59", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 886590, "out": 0, "xfer": false}, {"date": "2026-09-21", "time": "16:20:58", "acct": "국민 업무용", "type": "타행송금", "desc": "서*민", "inn": 0, "out": 19300, "xfer": false}, {"date": "2026-09-21", "time": "16:20:58", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-21", "time": "16:52:23", "acct": "국민 업무용", "type": "타행송금", "desc": "서*민", "inn": 0, "out": 371800, "xfer": false}, {"date": "2026-09-21", "time": "16:52:23", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-21", "time": "16:54:32", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V02", "inn": 0, "out": 10219000, "xfer": false}, {"date": "2026-09-21", "time": "16:54:32", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-21", "time": "17:02:39", "acct": "국민 업무용", "type": "타행송금", "desc": "오*지", "inn": 0, "out": 105500, "xfer": false}, {"date": "2026-09-21", "time": "17:02:39", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-22", "time": "06:00:12", "acct": "국민 업무용", "type": "지로요금", "desc": "한전전기요금", "inn": 0, "out": 493710, "xfer": false}, {"date": "2026-09-22", "time": "11:21:07", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1012830, "out": 0, "xfer": false}, {"date": "2026-09-22", "time": "15:05:48", "acct": "국민 업무용", "type": "해외송금", "desc": "해외매입처F01", "inn": 0, "out": 23174880, "xfer": false}, {"date": "2026-09-22", "time": "15:05:48", "acct": "국민 업무용", "type": "대체", "desc": "해외송금수수료", "inn": 0, "out": 10000, "xfer": false}, {"date": "2026-09-22", "time": "15:05:48", "acct": "국민 업무용", "type": "대체", "desc": "전신료", "inn": 0, "out": 8000, "xfer": false}, {"date": "2026-09-22", "time": "16:36:51", "acct": "국민 업무용", "type": "타행송금", "desc": "조*우", "inn": 0, "out": 303300, "xfer": false}, {"date": "2026-09-22", "time": "16:36:51", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "10:02:00", "acct": "신한 급여", "type": "타행입금", "desc": "(주)다온생활", "inn": 38000000, "out": 0, "xfer": true}, {"date": "2026-09-23", "time": "10:02:13", "acct": "국민 업무용", "type": "타행송금", "desc": "(주)다온생활", "inn": 0, "out": 38000000, "xfer": true}, {"date": "2026-09-23", "time": "10:02:13", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "11:16:01", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1219200, "out": 0, "xfer": false}, {"date": "2026-09-23", "time": "14:07:29", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V03", "inn": 0, "out": 7381000, "xfer": false}, {"date": "2026-09-23", "time": "14:07:29", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "급여", "desc": "최*진", "inn": 0, "out": 2335810, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "급여", "desc": "장*희", "inn": 0, "out": 2660650, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "급여", "desc": "윤*영", "inn": 0, "out": 1570150, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "급여", "desc": "최*현", "inn": 0, "out": 2402080, "xfer": false}, {"date": "2026-09-23", "time": "16:00:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "급여", "desc": "신*수", "inn": 0, "out": 2273700, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "급여", "desc": "김*현", "inn": 0, "out": 2825990, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "급여", "desc": "조*희", "inn": 0, "out": 1728430, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "급여", "desc": "김*준", "inn": 0, "out": 2996570, "xfer": false}, {"date": "2026-09-23", "time": "16:01:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "급여", "desc": "신*희", "inn": 0, "out": 1606370, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "급여", "desc": "권*서", "inn": 0, "out": 1773250, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "급여", "desc": "김*호", "inn": 0, "out": 2419220, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "급여", "desc": "신*우", "inn": 0, "out": 2545780, "xfer": false}, {"date": "2026-09-23", "time": "16:02:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "급여", "desc": "장*영", "inn": 0, "out": 1851200, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "급여", "desc": "조*우", "inn": 0, "out": 1669160, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "급여", "desc": "서*민", "inn": 0, "out": 2885300, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "급여", "desc": "오*지", "inn": 0, "out": 1868640, "xfer": false}, {"date": "2026-09-23", "time": "16:03:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "16:27:45", "acct": "국민 업무용", "type": "타행송금", "desc": "신*수", "inn": 0, "out": 314200, "xfer": false}, {"date": "2026-09-23", "time": "16:27:45", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "17:10:12", "acct": "국민 업무용", "type": "타행송금", "desc": "김*현", "inn": 0, "out": 126500, "xfer": false}, {"date": "2026-09-23", "time": "17:10:12", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "17:43:03", "acct": "국민 업무용", "type": "타행송금", "desc": "조*우", "inn": 0, "out": 95900, "xfer": false}, {"date": "2026-09-23", "time": "17:43:03", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-23", "time": "17:44:32", "acct": "국민 업무용", "type": "타행송금", "desc": "윤*영", "inn": 0, "out": 418500, "xfer": false}, {"date": "2026-09-23", "time": "17:44:32", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "06:00:48", "acct": "국민 업무용", "type": "지로요금", "desc": "복합기렌탈", "inn": 0, "out": 99000, "xfer": false}, {"date": "2026-09-28", "time": "06:00:52", "acct": "국민 업무용", "type": "지로요금", "desc": "정수기렌탈", "inn": 0, "out": 39600, "xfer": false}, {"date": "2026-09-28", "time": "09:30:13", "acct": "국민 업무용", "type": "자동이체", "desc": "택배사T01", "inn": 0, "out": 1300160, "xfer": false}, {"date": "2026-09-28", "time": "11:18:38", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1239940, "out": 0, "xfer": false}, {"date": "2026-09-28", "time": "11:21:43", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A01", "inn": 0, "out": 1430000, "xfer": false}, {"date": "2026-09-28", "time": "11:21:43", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "12:25:20", "acct": "국민 업무용", "type": "타행이체", "desc": "(주)세움건설 복지몰", "inn": 7348000, "out": 0, "xfer": false}, {"date": "2026-09-28", "time": "15:23:34", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V04", "inn": 0, "out": 9625000, "xfer": false}, {"date": "2026-09-28", "time": "15:23:34", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "16:30:18", "acct": "국민 업무용", "type": "타행송금", "desc": "신*희", "inn": 0, "out": 292000, "xfer": false}, {"date": "2026-09-28", "time": "16:30:18", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "16:57:58", "acct": "국민 업무용", "type": "타행송금", "desc": "최*현", "inn": 0, "out": 119500, "xfer": false}, {"date": "2026-09-28", "time": "16:57:58", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "17:17:11", "acct": "국민 업무용", "type": "타행송금", "desc": "조*희", "inn": 0, "out": 80600, "xfer": false}, {"date": "2026-09-28", "time": "17:17:11", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "17:51:12", "acct": "국민 업무용", "type": "타행송금", "desc": "조*우", "inn": 0, "out": 413000, "xfer": false}, {"date": "2026-09-28", "time": "17:51:12", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-28", "time": "17:57:51", "acct": "국민 업무용", "type": "타행송금", "desc": "최*진", "inn": 0, "out": 263300, "xfer": false}, {"date": "2026-09-28", "time": "17:57:51", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "06:00:48", "acct": "국민 업무용", "type": "지로요금", "desc": "보안서비스", "inn": 0, "out": 110000, "xfer": false}, {"date": "2026-09-29", "time": "11:12:12", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1179200, "out": 0, "xfer": false}, {"date": "2026-09-29", "time": "11:18:29", "acct": "국민 업무용", "type": "타행이체", "desc": "한가람유통(주)", "inn": 41503000, "out": 0, "xfer": false}, {"date": "2026-09-29", "time": "13:50:14", "acct": "국민 업무용", "type": "타행이체", "desc": "미래보험(주) 사내몰", "inn": 6501000, "out": 0, "xfer": false}, {"date": "2026-09-29", "time": "14:40:00", "acct": "신한 급여", "type": "인터넷뱅킹", "desc": "(주)다온생활 국민", "inn": 0, "out": 1500000, "xfer": true}, {"date": "2026-09-29", "time": "14:40:00", "acct": "신한 급여", "type": "수수료", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "14:40:45", "acct": "국민 업무용", "type": "타행이체", "desc": "(주)다온생활", "inn": 1500000, "out": 0, "xfer": true}, {"date": "2026-09-29", "time": "15:29:15", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V05", "inn": 0, "out": 9009000, "xfer": false}, {"date": "2026-09-29", "time": "15:29:15", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "16:57:59", "acct": "국민 업무용", "type": "타행송금", "desc": "신*수", "inn": 0, "out": 190800, "xfer": false}, {"date": "2026-09-29", "time": "16:57:59", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "17:24:10", "acct": "국민 업무용", "type": "타행송금", "desc": "오*지", "inn": 0, "out": 81400, "xfer": false}, {"date": "2026-09-29", "time": "17:24:10", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "17:38:02", "acct": "국민 업무용", "type": "타행송금", "desc": "신*수", "inn": 0, "out": 70500, "xfer": false}, {"date": "2026-09-29", "time": "17:38:02", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-29", "time": "17:47:30", "acct": "국민 업무용", "type": "타행송금", "desc": "최*진", "inn": 0, "out": 414900, "xfer": false}, {"date": "2026-09-29", "time": "17:47:30", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "09:28:59", "acct": "국민 업무용", "type": "타행이체", "desc": "그린마트(주)", "inn": 35574000, "out": 0, "xfer": false}, {"date": "2026-09-30", "time": "11:15:10", "acct": "국민 업무용", "type": "타행이체", "desc": "온라인몰 카드결제 정산", "inn": 1130050, "out": 0, "xfer": false}, {"date": "2026-09-30", "time": "11:54:14", "acct": "국민 업무용", "type": "타행송금", "desc": "광고매체A02", "inn": 0, "out": 1540000, "xfer": false}, {"date": "2026-09-30", "time": "11:54:14", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "14:42:18", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V06", "inn": 0, "out": 8635000, "xfer": false}, {"date": "2026-09-30", "time": "14:42:18", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "15:30:06", "acct": "국민 업무용", "type": "타행송금", "desc": "(주)용인로지스부동산", "inn": 0, "out": 8000000, "xfer": false}, {"date": "2026-09-30", "time": "15:30:06", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "15:31:34", "acct": "국민 업무용", "type": "타행송금", "desc": "(주)용인로지스부동산", "inn": 0, "out": 1200000, "xfer": false}, {"date": "2026-09-30", "time": "15:31:34", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "17:10:49", "acct": "국민 업무용", "type": "타행송금", "desc": "김*준", "inn": 0, "out": 259000, "xfer": false}, {"date": "2026-09-30", "time": "17:10:49", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-09-30", "time": "17:13:29", "acct": "국민 업무용", "type": "타행송금", "desc": "오*지", "inn": 0, "out": 117500, "xfer": false}, {"date": "2026-09-30", "time": "17:13:29", "acct": "국민 업무용", "type": "대체", "desc": "타행이체수수료", "inn": 0, "out": 500, "xfer": false}, {"date": "2026-10-01", "time": "09:05:37", "acct": "국민 업무용", "type": "대체", "desc": "대출이자", "inn": 0, "out": 650000, "xfer": false}, {"date": "2026-10-01", "time": "10:17:23", "acct": "국민 업무용", "type": "타행이체", "desc": "한가람유통(주)", "inn": 58410000, "out": 0, "xfer": false}, {"date": "2026-10-01", "time": "11:02:00", "acct": "신한 급여", "type": "타행입금", "desc": "(주)다온생활", "inn": 3100000, "out": 0, "xfer": true}, {"date": "2026-10-01", "time": "11:02:20", "acct": "국민 업무용", "type": "타행송금", "desc": "(주)다온생활", "inn": 0, "out": 3100000, "xfer": true}, {"date": "2026-10-01", "time": "11:09:30", "acct": "국민 업무용", "type": "타행이체", "desc": "미래보험(주) 사내몰", "inn": 3100000, "out": 0, "xfer": false}, {"date": "2026-10-01", "time": "14:26:15", "acct": "국민 업무용", "type": "타행송금", "desc": "매입처V03", "inn": 0, "out": 27280000, "xfer": false}, {"date": "2026-10-01", "time": "15:48:43", "acct": "국민 업무용", "type": "타행송금", "desc": "택배사T01", "inn": 0, "out": 5802610, "xfer": false}, {"date": "2026-10-01", "time": "16:00:00", "acct": "신한 급여", "type": "대량이체", "desc": "9월 상여", "inn": 0, "out": 2817900, "xfer": false}]};
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const fmtM = n => (n / 1e6).toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+const WD = ['일','월','화','수','목','금','토'];
+const label = d => { const [y,m,dd] = d.split('-').map(Number); return `${d} (${WD[new Date(y, m-1, dd).getDay()]})`; };
+const short = d => { const [,m,dd] = d.split('-').map(Number); return `${m}/${dd}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let cur = D.days.length - 1;               // 기본: 가장 최근 거래일
+const day = () => D.days[cur];
+
+function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v || 1))); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, t = [];
+  for (let v = a; v <= b + step / 2; v += step) t.push(v);
+  return t;
+}
+
+/* ───── 헤더·검산 ───── */
+function renderHead() {
+  $('company').textContent = D.company;
+  $('sub').textContent = `기준일 ${label(day().date)} · 데이터 ${D.days[0].date} ~ ${D.asOf} · 갱신 ${D.builtAt}`;
+  const sel = $('dateSel');
+  if (!sel.options.length) D.days.forEach((d, i) => sel.add(new Option(label(d.date), i)));
+  sel.value = cur;
+  $('prev').disabled = cur === 0;
+  $('next').disabled = cur === D.days.length - 1;
+  $('latest').disabled = cur === D.days.length - 1;
+}
+function renderChecks() {
+  const ok = D.checks.filter(c => c.ok).length, all = D.checks.length, pass = ok === all;
+  $('checks').innerHTML =
+    `<summary><span class="chip"><b class="${pass ? 'pass' : 'fail'}">${pass ? '✓ PASS' : '✕ FAIL'}</b> 검산 ${ok}/${all}</span>
+       <span style="color:var(--ink-2);font-size:12px">${pass ? '잔액 연속성·이체 짝·월말 대사 모두 일치' : '불일치 항목이 있습니다 — 펼쳐서 확인'} (클릭해 상세 보기)</span></summary>
+     <ul>${D.checks.map(c => `<li><span class="st ${c.ok ? 'pass' : 'fail'}">${c.ok ? '✓ PASS' : '✕ FAIL'}</span><span>${esc(c.label)}<br><span style="color:var(--ink-2)">${esc(c.detail)}</span></span></li>`).join('')}</ul>`;
+}
+
+/* ───── KPI ───── */
+function renderKpis() {
+  const d = day(), diff = d.totalClose - d.totalOpen, net = d.realIn - d.realOut;
+  const sign = n => (n > 0 ? '▲ +' : n < 0 ? '▼ −' : '– ') + fmt(Math.abs(n));
+  const tiles = [
+    ['합계 잔액 (금일)', fmt(d.totalClose), `전일 대비 ${sign(diff)}원`],
+    ['실제 입금', fmt(d.realIn), `계좌 입금 ${fmt(d.realIn + d.xfer)} − 이체 ${fmt(d.xfer)}`],
+    ['실제 출금', fmt(d.realOut), `계좌 출금 ${fmt(d.realOut + d.xfer)} − 이체 ${fmt(d.xfer)}`],
+    ['실제 순입출금', (net < 0 ? '−' : net > 0 ? '+' : '') + fmt(Math.abs(net)), '실제 입금 − 실제 출금'],
+  ];
+  $('kpis').innerHTML = tiles.map(([l, v, m]) => `<div class="kpi"><div class="lab">${l}</div><div class="val">${v}<small>원</small></div><div class="meta">${m}</div></div>`).join('');
+}
+
+/* ───── 표 ───── */
+function renderTables() {
+  const d = day(), A = D.accounts;
+  const sum = k => A.reduce((s, a) => s + d.accts[a][k], 0);
+  const row = (name, k) => `<tr class="${name === '합계' ? 'total' : ''}"><td>${name}</td>` +
+    ['open','inn','out','close','mtdIn','mtdOut'].map(f => `<td class="num">${fmt(name === '합계' ? sum(f) : d.accts[name][f])}</td>`).join('') + '</tr>';
+  $('report').innerHTML = `<thead><tr><th>계좌</th><th>전일 잔액</th><th>입금</th><th>출금</th><th>금일 잔액</th><th>월누계 입금</th><th>월누계 출금</th></tr></thead><tbody>` +
+    A.map(a => row(a)).join('') + row('합계') + '</tbody>';
+
+  $('real').innerHTML = `<thead><tr><th>구분</th><th>계좌 합계</th><th>계좌간이체</th><th>실제 금액</th></tr></thead><tbody>
+    <tr><td>입금</td><td class="num">${fmt(d.realIn + d.xfer)}</td><td class="num">${fmt(d.xfer)}</td><td class="num"><b>${fmt(d.realIn)}</b></td></tr>
+    <tr><td>출금</td><td class="num">${fmt(d.realOut + d.xfer)}</td><td class="num">${fmt(d.xfer)}</td><td class="num"><b>${fmt(d.realOut)}</b></td></tr></tbody>`;
+  const xs = D.transfers.filter(p => p.date === d.date);
+  $('xferList').innerHTML = xs.length
+    ? '계좌간이체: ' + xs.map(p => `${esc(p.fromAcct)} → ${esc(p.toAcct)} <b>${fmt(p.amount)}원</b>`).join(', ')
+    : '이 날 계좌간이체 없음';
+
+  const rows = D.txns.filter(t => t.date === d.date);
+  $('txnDate').textContent = `· ${label(d.date)} · ${rows.length}건`;
+  $('txns').innerHTML = rows.length
+    ? `<thead><tr><th>계좌</th><th>시각</th><th>구분</th><th class="l">거래처·내용</th><th>입금</th><th>출금</th><th>계좌간이체</th></tr></thead><tbody>` +
+      rows.map(t => `<tr><td class="l">${esc(t.acct)}</td><td class="num">${t.time.slice(0,5)}</td><td>${esc(t.type)}</td><td class="l">${esc(t.desc)}</td>
+        <td class="num">${t.inn ? fmt(t.inn) : ''}</td><td class="num">${t.out ? fmt(t.out) : ''}</td><td>${t.xfer ? '<span class="tag">예 · 이체</span>' : ''}</td></tr>`).join('') + '</tbody>'
+    : '<tbody><tr><td class="empty">거래 없음</td></tr></tbody>';
+}
+
+/* ───── 차트 공통 ───── */
+function frame(el, W, H, m) { return { W, H, m, iw: W - m.l - m.r, ih: H - m.t - m.b }; }
+function tooltip(el, html, x, y, W) {
+  let t = el.querySelector('.tip');
+  if (!t) { t = document.createElement('div'); t.className = 'tip'; el.appendChild(t); }
+  if (html == null) { t.style.opacity = 0; return; }
+  t.innerHTML = html; t.style.opacity = 1;
+  const w = t.offsetWidth;
+  t.style.left = Math.max(0, Math.min(el.clientWidth - w, x - w / 2)) + 'px';
+  t.style.top = Math.max(0, y - t.offsetHeight - 12) + 'px';
+}
+const WIN = 22;   // 차트에 보이는 최근 거래일 수 (월이 바뀌어도 이어서 보임)
+const monthDays = () => { const s = Math.max(0, Math.min(cur, D.days.length - WIN)); return D.days.map((d, i) => ({ d, i })).slice(s, s + WIN); };
+
+/* ───── 합계 잔액 추이 (이 달) ───── */
+function renderBal() {
+  const el = $('balChart'), pts = monthDays();
+  const W = Math.max(280, el.clientWidth), H = 220, f = frame(el, W, H, { l: 44, r: 12, t: 10, b: 26 });
+  const vals = pts.map(p => p.d.totalClose);
+  const ticks = niceTicks(Math.min(...vals), Math.max(...vals), 4), lo = ticks[0], hi = ticks[ticks.length - 1];
+  const X = k => f.m.l + (pts.length === 1 ? f.iw / 2 : f.iw * k / (pts.length - 1));
+  const Y = v => f.m.t + f.ih * (1 - (v - lo) / (hi - lo || 1));
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 거래일별 합계 잔액 추이">`;
+  ticks.forEach(t => s += `<line x1="${f.m.l}" x2="${W - f.m.r}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)"/><text x="${f.m.l - 6}" y="${Y(t) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtM(t)}</text>`);
+  const step = Math.ceil(pts.length / 6);
+  pts.forEach((p, k) => { if (k % step === 0 || k === pts.length - 1) s += `<text x="${X(k)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${short(p.d.date)}</text>`; });
+  s += `<path d="${pts.map((p, k) => (k ? 'L' : 'M') + X(k) + ' ' + Y(p.d.totalClose)).join('')}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>`;
+  const sk = pts.findIndex(p => p.i === cur);
+  if (sk >= 0) s += `<circle cx="${X(sk)}" cy="${Y(pts[sk].d.totalClose)}" r="5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+     <text x="${X(sk)}" y="${Y(pts[sk].d.totalClose) - 10}" text-anchor="${sk > pts.length / 2 ? 'end' : 'start'}" font-size="11" fill="var(--ink)">${fmtM(pts[sk].d.totalClose)}</text>`;
+  s += `<line id="bx" y1="${f.m.t}" y2="${f.m.t + f.ih}" stroke="var(--axis)" opacity="0"/><rect x="${f.m.l}" y="0" width="${f.iw}" height="${H}" fill="transparent" id="bhit" style="cursor:pointer"/></svg>`;
+  el.innerHTML = s;
+  const hit = el.querySelector('#bhit'), bx = el.querySelector('#bx');
+  const idx = e => { const r = hit.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * f.iw; return Math.max(0, Math.min(pts.length - 1, Math.round(x / f.iw * (pts.length - 1)))); };
+  hit.addEventListener('mousemove', e => {
+    const k = idx(e), d = pts[k].d; bx.setAttribute('x1', X(k)); bx.setAttribute('x2', X(k)); bx.setAttribute('opacity', 1);
+    tooltip(el, `<b>${label(d.date)}</b>` + D.accounts.map(a => `<div><span class="k">${esc(a)}</span><span>${fmt(d.accts[a].close)}</span></div>`).join('') + `<div><span class="k">합계</span><b style="margin:0">${fmt(d.totalClose)}</b></div>`, X(k), Y(d.totalClose), W);
+  });
+  hit.addEventListener('mouseleave', () => { bx.setAttribute('opacity', 0); tooltip(el, null); });
+  hit.addEventListener('click', e => go(pts[idx(e)].i));
+}
+
+/* ───── 일별 실제 입금·출금 (이 달) ───── */
+function renderFlow() {
+  const el = $('flowChart'), pts = monthDays();
+  const W = Math.max(300, el.clientWidth), H = 250, f = frame(el, W, H, { l: 44, r: 12, t: 10, b: 26 });
+  const ticks = niceTicks(0, Math.max(...pts.map(p => Math.max(p.d.realIn, p.d.realOut)), 1), 4), hi = ticks[ticks.length - 1];
+  const Y = v => f.m.t + f.ih * (1 - v / hi), slot = f.iw / pts.length, bw = Math.max(3, Math.min(18, slot * .36));
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="일별 실제 입금과 출금">`;
+  ticks.forEach(t => s += `<line x1="${f.m.l}" x2="${W - f.m.r}" y1="${Y(t)}" y2="${Y(t)}" stroke="${t === 0 ? 'var(--axis)' : 'var(--grid)'}"/><text x="${f.m.l - 6}" y="${Y(t) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtM(t)}</text>`);
+  const bar = (x, v, c) => { if (!v) return ''; const y = Y(v), h = Y(0) - y, r = Math.min(4, bw / 2, h);
+    return `<path d="M${x} ${Y(0)}V${y + r}Q${x} ${y} ${x + r} ${y}H${x + bw - r}Q${x + bw} ${y} ${x + bw} ${y + r}V${Y(0)}Z" fill="${c}"/>`; };
+  const step = Math.ceil(pts.length / 10);
+  pts.forEach((p, k) => {
+    const cx = f.m.l + slot * (k + .5), sel = p.i === cur;
+    if (sel) s += `<rect x="${cx - slot / 2}" y="${f.m.t}" width="${slot}" height="${f.ih}" fill="var(--chip)"/>`;
+    s += bar(cx - bw - 1, p.d.realIn, 'var(--s1)') + bar(cx + 1, p.d.realOut, 'var(--s2)');
+    if (k % step === 0 || sel) s += `<text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${sel ? 'var(--ink)' : 'var(--muted)'}" ${sel ? 'font-weight="700"' : ''}>${short(p.d.date)}</text>`;
+  });
+  s += `<rect x="${f.m.l}" y="0" width="${f.iw}" height="${H}" fill="transparent" id="fhit" style="cursor:pointer"/></svg>`;
+  el.innerHTML = s;
+  const hit = el.querySelector('#fhit');
+  const idx = e => { const r = hit.getBoundingClientRect(); return Math.max(0, Math.min(pts.length - 1, Math.floor((e.clientX - r.left) / r.width * pts.length))); };
+  hit.addEventListener('mousemove', e => {
+    const k = idx(e), d = pts[k].d;
+    tooltip(el, `<b>${label(d.date)}</b><div><span class="k"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--s1);margin-right:5px"></i>실제 입금</span><span>${fmt(d.realIn)}</span></div>
+      <div><span class="k"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--s2);margin-right:5px"></i>실제 출금</span><span>${fmt(d.realOut)}</span></div>` +
+      (d.xfer ? `<div><span class="k">계좌간이체(제외)</span><span>${fmt(d.xfer)}</span></div>` : ''), f.m.l + slot * (k + .5), Y(Math.max(d.realIn, d.realOut)), W);
+  });
+  hit.addEventListener('mouseleave', () => tooltip(el, null));
+  hit.addEventListener('click', e => go(pts[idx(e)].i));
+}
+
+function go(i) { cur = Math.max(0, Math.min(D.days.length - 1, i)); render(); }
+function render() {
+  renderHead(); renderKpis(); renderTables(); renderBal(); renderFlow();
+  $('foot').textContent = `원본 파일 ${D.files.length}개: ${D.files.join(', ')}` + (D.dupDropped ? ` · 중복 거래 ${D.dupDropped}건 제외` : '');
+}
+$('prev').onclick = () => go(cur - 1);
+$('next').onclick = () => go(cur + 1);
+$('latest').onclick = () => go(D.days.length - 1);
+$('dateSel').onchange = e => go(+e.target.value);
+document.addEventListener('keydown', e => { if (e.target.tagName === 'SELECT') return; if (e.key === 'ArrowLeft') go(cur - 1); if (e.key === 'ArrowRight') go(cur + 1); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { renderBal(); renderFlow(); }, 80); });
+/* 열어본 날 기준 직전 영업일 거래가 데이터에 없으면 경고 (공휴일은 걸러주지 않음) */
+function renderStale() {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  do { t.setDate(t.getDate() - 1); } while (t.getDay() === 0 || t.getDay() === 6);
+  const want = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const el = $('stale');
+  el.hidden = D.asOf >= want;
+  if (!el.hidden) el.innerHTML = `<b>⚠ 최신 거래내역 확인 필요</b> · 데이터는 ${label(D.asOf)}까지입니다. 직전 영업일 ${label(want)} 거래내역 파일이 아직 안 들어왔을 수 있습니다 (공휴일이면 무시).`;
+}
+renderChecks(); renderStale(); render();
+</script>
+</body>
+</html>
